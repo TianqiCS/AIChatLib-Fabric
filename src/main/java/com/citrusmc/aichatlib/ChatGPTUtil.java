@@ -1,8 +1,8 @@
-package com.citrusmc.chatbot;
+package com.citrusmc.aichatlib;
 
-import com.citrusmc.chatbot.client.ChatGroup;
-import com.citrusmc.chatbot.configs.ClientConfig;
-import com.citrusmc.chatbot.configs.Config;
+import com.citrusmc.aichatlib.client.ChatGroup;
+import com.citrusmc.aichatlib.configs.ClientConfig;
+import com.citrusmc.aichatlib.configs.Config;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import okhttp3.*;
@@ -14,16 +14,16 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.CompletableFuture;
 
 public class ChatGPTUtil {
-    private static final Logger LOGGER = LoggerFactory.getLogger("ChatBot");
+    private static final Logger LOGGER = LoggerFactory.getLogger("ChatBot-ChatGPTUtil");
     private static final OkHttpClient httpClient = HttpClientFactory.createClient();
     private static final Config CONFIG = ClientConfig.getInstance();
-
-    static final Boolean USE_STREAM = (Boolean) CONFIG.get("Model.use-stream");
-    static final String API_URL = "https://api.openai.com/v1/chat/completions";
-    static final String API_KEY = (String) CONFIG.get("Model.openai-key");
+    private static final Boolean USE_STREAM = (Boolean) CONFIG.get("Model.use-stream");
+    protected static final String API_URL = (String) CONFIG.get("Model.api");
+    private static final String API_KEY = (String) CONFIG.get("Model.openai-key");
     private static final String PROMPT = (String) CONFIG.get("Model.system-prompt");
 
-    private static JsonObject getChatGPTResponse(String message) {
+    @Deprecated // Obsolete method, use getChatGPTResponseAsync instead
+    public static JsonObject getChatGPTResponse(String message) {
         RequestBody body = RequestBody.create(
                 "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"system\", \"content\": \"You are a helpful assistant.\"}, {\"role\": \"user\", \"content\": \"" + message + "\"}]}",
                 okhttp3.MediaType.get("application/json; charset=utf-8")
@@ -49,14 +49,24 @@ public class ChatGPTUtil {
     }
 
 
-
-    public static Headers createHeaders() {
+    /**
+     * Create the headers for the request
+     *
+     * @return the headers
+     */
+    protected static Headers createHeaders() {
         return new Headers.Builder()
                 .add("Content-Type", "application/json")
                 .add("Authorization", "Bearer " + API_KEY)
                 .build();
     }
-    @Deprecated
+    /**
+     * Create the request body for the request
+     *
+     * @param message   the message
+     * @return the request body
+     */
+    @Deprecated // Consider using a chat group instead
     public static RequestBody createBody(String message) {
         return RequestBody.create(
                 "{" +
@@ -73,6 +83,13 @@ public class ChatGPTUtil {
         );
     }
 
+    /**
+     * Create the request body for the request
+     *
+     * @param chatGroup the chat group
+     * @param message   the message
+     * @return the request body
+     */
     public static RequestBody createBody(ChatGroup chatGroup, String message) {
         ChatHistory chatHistory;
         // > 2 size does not matter, we only need the last 2 messages for the prompt and the user message
@@ -81,15 +98,24 @@ public class ChatGPTUtil {
         return createBody(chatGroup, chatHistory);
     }
 
+    /**
+     * Create the request body for the request
+     * @param chatGroup the chat group
+     * @param chatHistory the chat history
+     * @return the request body
+     */
     public static RequestBody createBody(ChatGroup chatGroup, ChatHistory chatHistory) {
         String newPrompt;
         ChatHistory newChatHistory;
+
+        // add chat-group specific prompt to the system prompt
         if (chatGroup.prompt != null) {
             newPrompt = PROMPT + " " + chatGroup.prompt;
         } else {
             newPrompt = PROMPT;
         }
 
+        // add system message (prompt) to the chat history
         newChatHistory = new ChatHistory(1);
         newChatHistory.addSystemMessage(newPrompt);
         newChatHistory = newChatHistory.concat(chatHistory, true);
@@ -105,33 +131,63 @@ public class ChatGPTUtil {
                 "\"presence_penalty\": " + chatGroup.presencePenalty + ", " +
                 "\"stream\": " + USE_STREAM +
                 "}";
-        LOGGER.info(body); // XXX: Remove this line in production
+
+        if ((boolean) CONFIG.get("Settings.debug"))
+            LOGGER.info(body);
+
         return RequestBody.create(
                 body,
                 okhttp3.MediaType.get("application/json; charset=utf-8")
         );
     }
 
+    /**
+     * Send and get response from ChatGPT asynchronously
+     *
+     * @param chatGroup the chat group
+     * @param message   the message
+     * @return the response from ChatGPT
+     */
     public static CompletableFuture<JsonObject> getChatGPTResponseAsync(ChatGroup chatGroup, String message) {
         RequestBody body = createBody(chatGroup, message);
         Headers headers = createHeaders();
         return getChatGPTResponseAsync(headers, body);
     }
 
+    /**
+     * Send and get response from ChatGPT asynchronously
+     *
+     * @param chatGroup the chat group
+     * @param chatHistory the chat history
+     * @return the response from ChatGPT
+     */
     public static CompletableFuture<JsonObject> getChatGPTResponseAsync(ChatGroup chatGroup, ChatHistory chatHistory) {
         RequestBody body = createBody(chatGroup, chatHistory);
         Headers headers = createHeaders();
         return getChatGPTResponseAsync(headers, body);
     }
 
-    @Deprecated
+    /**
+     * Send and get response from ChatGPT asynchronously
+     * @param message the message sent to ChatGPT
+     * @return the response from ChatGPT
+     */
+    @Deprecated // Consider using a chat group instead
     public static CompletableFuture<JsonObject> getChatGPTResponseAsync(String message) {
         RequestBody body = createBody(message);
         Headers headers = createHeaders();
         return getChatGPTResponseAsync(headers, body);
     }
 
+    /**
+     * Send and get response from ChatGPT asynchronously
+     *
+     * @param headers the headers
+     * @param body    the request body
+     * @return the response from ChatGPT
+     */
     public static CompletableFuture<JsonObject> getChatGPTResponseAsync(Headers headers, RequestBody body) {
+        boolean debug = (boolean) CONFIG.get("Settings.debug");
         CompletableFuture<JsonObject> futureResponse = new CompletableFuture<>();
         Request request = new Request.Builder()
                 .url(API_URL)
@@ -143,10 +199,12 @@ public class ChatGPTUtil {
             @Override
             public void onFailure(Call call, IOException e) {
                 if (e instanceof SocketTimeoutException) {
-                    LOGGER.info(String.format("Request timed out"));
+                    if (debug)
+                        LOGGER.info(String.format("Request timed out: %s", e.getMessage()));
                     futureResponse.completeExceptionally(new IOException("Request timed out"));
                 } else {
-                    LOGGER.info(String.format(e.getMessage()));
+                    if (debug)
+                        LOGGER.info(String.format("Exception: %s", e.getMessage()));
                     futureResponse.completeExceptionally(e);
                 }
             }
@@ -154,14 +212,16 @@ public class ChatGPTUtil {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
-                    LOGGER.info(String.format(response.toString()));
+                    if (debug)
+                        LOGGER.info(String.format("Unexpected code: %s", response));
                     futureResponse.completeExceptionally(new IOException("Unexpected code " + response));
                 } else {
-                    // Extract the response from ChatGPT (you might need to adjust this part based on the actual response structure)
+                    // Extract the response from ChatGPT
                     String responseBody = response.body().string();
-                    LOGGER.info(responseBody);
+                    if (debug)
+                        LOGGER.info(responseBody);
                     JsonObject responseBodyJson = new Gson().fromJson(responseBody, JsonObject.class);
-                    futureResponse.complete(responseBodyJson); // You might want to parse the JSON and extract the specific field you need
+                    futureResponse.complete(responseBodyJson);
                 }
             }
         });
@@ -170,6 +230,11 @@ public class ChatGPTUtil {
     }
 
 
+    /**
+     * Get message from response object
+     * @param response the response object
+     * @return the message string
+     */
     public static String getResponse(JsonObject response) {
         String content = response
                 .get("choices").getAsJsonArray()

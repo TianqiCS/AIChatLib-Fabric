@@ -1,26 +1,30 @@
 {
   "schemaVersion": 1,
-  "id": "chatbot",
+  "id": "aichatlib",
   "version": "${version}",
-
-  "name": "ChatBot",
+  "name": "AIChatLib",
   "description": "",
   "authors": [],
-  "contact": {},
-
+  "contact": {
+    "repo": "https://github.com/tqwan/ChatBot"
+  },
   "license": "All-Rights-Reserved",
   "icon": "assets/chatbot/icon.png",
-
   "environment": "*",
-  "entrypoints": {},
-
-          "mixins": [
-        "chatbot.mixins.json"
-      ],
-    
+  "entrypoints": {
+    "client": [
+      "com.citrusmc.aichatlib.client.ChatBotClient"
+    ],
+    "main": [
+      "com.citrusmc.aichatlib.ChatBot"
+    ]
+  },
+  "mixins": [
+    "aichatlib.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=${loader_version}",
-              "fabric": "*",
-          "minecraft": "${minecraft_version}"
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
   }
 }

@@ -1,0 +1,56 @@
+Model:
+    api: "https://api.openai.com/v1/chat/completions"
+    openai-key: "sk-YOUR-KEY-HERE"
+    openai-engine: "gpt-3.5-turbo"
+    use-stream: true
+    system-prompt: "You are a helpful assistant in Minecraft. Your responses should be concise, clear, and in plain text. Avoid special characters, styles, and emojis that the game chat can't display. Provide brief answers and only elaborate if the player requests more details. Notice that the questions are likely to be irrelevant to the context of the game."
+    max-tokens: 5000
+    temperature: 1.0
+    top-p: 1.0
+    frequency-penalty: 0.0
+    presence-penalty: 0.0
+Settings:
+    debug: false
+    input-delay: 1000
+    max-message-length: 256
+
+VanillaChatGroup:
+    chat-history-size: 0
+    include-names: true
+    triggers: []
+    blacklist:
+        - "username1"
+        - "banned_word2"
+
+ChatGroups:
+    multiplayer1:
+        chat-history-size: 0
+        include-names: true
+        max-tokens: 5000
+        temperature: 1.0
+        top-p: 1.0
+        openai-engine: "gpt-4"
+        frequency-penalty: 0.0
+        presence-penalty: 0.0
+        prompt: "extra prompt"
+        triggers: []
+        sender: "regex"
+        message: "regex"
+        blacklist:
+            - "username1"
+            - "banned_word2"
+    vanilla-style-private-chat-example:
+        chat-history-size: 5
+        include-names: false
+        triggers:
+            - "@GPT"
+        sender: "^<([^> ]+)> .*$"
+        message: "^<[^> ]+> (.*)$"
+        blacklist: []
+    free-chat-example:
+        chat-history-size: 3
+        include-names: true
+        triggers: []
+        sender: "^([^: ]+): .*$"
+        message: "^[^: ]+: (.*)$"
+        blacklist: []

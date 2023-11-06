@@ -1,10 +1,10 @@
-package com.citrusmc.chatbot.client;
+package com.citrusmc.aichatlib.client;
 
-import com.citrusmc.chatbot.ChatGPTUtil;
-import com.citrusmc.chatbot.ChatHistory;
-import com.citrusmc.chatbot.ConcurrentChatGPT;
-import com.citrusmc.chatbot.configs.ClientConfig;
-import com.citrusmc.chatbot.configs.Config;
+import com.citrusmc.aichatlib.ChatGPTUtil;
+import com.citrusmc.aichatlib.ChatHistory;
+import com.citrusmc.aichatlib.StreamChatGPT;
+import com.citrusmc.aichatlib.configs.ClientConfig;
+import com.citrusmc.aichatlib.configs.Config;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -24,18 +24,27 @@ import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 import static com.mojang.brigadier.arguments.StringArgumentType.greedyString;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
 
+/**
+ * The client mod initializer
+ */
 public class ChatBotClient implements ClientModInitializer {
-    public static final Logger LOGGER = LoggerFactory.getLogger("ChatBot");
-    public static Config CONFIG = null;
-    public static TextParser PARSER = null;
+    private static final Logger LOGGER = LoggerFactory.getLogger("ChatBot-Client");
+    private static Config CONFIG = null;
+    private static TextParser PARSER = null;
     private final Semaphore semaphore = new Semaphore(1);
     private volatile ChatHistoryManager chatHistoryManager = ChatHistoryManager.getInstance();
+
+    /**
+     * Initialize the client mod
+     */
     @Override
     public void onInitializeClient() {
         CONFIG = ClientConfig.getInstance();
         PARSER = TextParser.getInstance();
         boolean useStream = (boolean) CONFIG.get("Model.use-stream");
+        boolean debug = (boolean) CONFIG.get("Settings.debug");
 
+        // Register the askgpt command
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(
                     ClientCommandManager
@@ -44,12 +53,14 @@ public class ChatBotClient implements ClientModInitializer {
                             .executes(context -> {
                                 String message = getString(context, "message");
                                 context.getSource().sendFeedback(Text.of("Sending message to ChatGPT: " + message));
+                                // Don't send empty messages
                                 if (message == null || message.length() == 0) {
                                     return 0;
                                 }
+                                // Use vanilla chat group properties for the api call
                                 ChatGroup chatGroup = TextParser.getChatGroupByName("vanilla");
                                 if (useStream) {
-                                    ConcurrentChatGPT chatGPT = new ConcurrentChatGPT(chatGroup, message, this::sendSelfMessages, this::onSelfRequestTimeout);
+                                    StreamChatGPT chatGPT = new StreamChatGPT(chatGroup, message, this::sendSelfMessages, this::onSelfRequestTimeout);
                                     chatGPT.start();
                                 } else {
                                     ChatGPTUtil.getChatGPTResponseAsync(chatGroup, message).thenAccept(data -> {
@@ -61,73 +72,74 @@ public class ChatBotClient implements ClientModInitializer {
                             })));
         });
 
+        // Register chat message event to capture chat messages (vanilla and modded environments)
         ClientReceiveMessageEvents.CHAT.register(((message, signedMessage, sender, params, receptionTimestamp) -> {
             ClientPlayerEntity client = MinecraftClient.getInstance().player;
 
             String text = message.getString();
             assert client != null;
+
+            // Don't process the message if it's sent by the client itself
             String senderName = sender == null ? params.name().getString() : sender.getName();
-            LOGGER.info(String.format("Received chat message: %s from %s", text, senderName));
-            // processRequest("vanilla", useStream, senderName, text, client);  // naive way to implement
+            if (debug)
+                LOGGER.info(String.format("Received chat message: %s from %s", text, senderName));
+
             String[] results;
-            String chatGroup;
+            String chatGroupName;
+
             results = PARSER.parseChatMessage(message.getString());
             if (results == null) {
                 return;
             }
-            chatGroup = results[0];
-            // senderName = results[1];
+            chatGroupName = results[0];
+            // senderName = results[1]; // we get the sender name from the sender object
             text = results[2];
-            processRequest(chatGroup, useStream, senderName, text, client);
+            processRequest(chatGroupName, useStream, senderName, text, client);
         }));
 
-
+        // Register game message event to capture game messages (e.g., spigot server with custom chat format/plugins)
         ClientReceiveMessageEvents.GAME.register(((message, overlay) -> {
-            String chatGroup;
+            String chatGroupName;
             String sender, text;
             String[] results;
             ClientPlayerEntity client = MinecraftClient.getInstance().player;
-            //LOGGER.info(String.format("Received game message: %s", message.getString()));
+            assert client != null;
+
             results = PARSER.parseGameMessage(message.getString());
             if (results == null) {
                 return;
             }
-            chatGroup = results[0];
+
+            chatGroupName = results[0];
             sender = results[1];
             text = results[2];
-            LOGGER.info(String.format("Received game message: chatGroup: %s sender: %s text: %s", chatGroup, sender, text));
-            processRequest(chatGroup, useStream, sender, text, client);
+            if (debug)
+                LOGGER.info(String.format("Received game message: chatGroup: %s sender: %s text: %s", chatGroupName, sender, text));
+            processRequest(chatGroupName, useStream, sender, text, client);
         }));
-
-//        ServerMessageEvents.CHAT_MESSAGE.register(((message, sender, params) -> {
-//            ClientPlayerEntity client = MinecraftClient.getInstance().player;
-//            String text = message.getContent().getString();
-//            assert client != null;
-//            if (!client.getName().getString().equals(sender.getName().getString())) {
-//                ConcurrentChatGPT chatGPT = new ConcurrentChatGPT(text, this::processChunk);
-//                chatGPT.start();
-////                ChatGPTUtil.getChatGPTResponseAsync(text).thenAccept(data -> {
-////                    String response = ChatGPTUtil.getResponse(data);
-////                    LOGGER.info(response);
-////                    processChunk(response);
-////                });
-//                //
-//
-//            } else {
-//                client.sendMessage(Text.of("self"), true);
-//            }
-//
-//        }));
 
         LOGGER.info("ChatBotClient initialized.");
     }
 
+    /**
+     * Process the request to send to ChatGPT
+     * @param chatGroupName chat group name
+     * @param useStream whether to use stream feature or not
+     * @param sender sender name
+     * @param text message text
+     * @param client client player entity
+     */
     private void processRequest(String chatGroupName, boolean useStream, String sender, String text, ClientPlayerEntity client) {
         ChatGroup chatGroup = TextParser.getChatGroupByName(chatGroupName);
+        // Don't process the message if it's sent by the client itself
         if (!client.getName().getString().equals(sender)) {
+
             if (useStream) {
+                // If the chat history size is greater than 0, enable the chat history feature
                 if (chatGroup.chatHistorySize > 0) {
-                    ChatHistory chatHistory = chatHistoryManager.getChatHistory(chatGroup, sender);
+                    ChatHistory chatHistory = chatHistoryManager.retrieveChatHistory(chatGroup, sender);
+
+                    // include the sender name in the chat history
                     if (chatGroup.includeNames)
                         chatHistory.addUserMessage(String.format("%s: %s", sender, text));
                     else
@@ -139,28 +151,36 @@ public class ChatBotClient implements ClientModInitializer {
                         sendMessages(response);
                     };
 
-                    ConcurrentChatGPT chatGPT = new ConcurrentChatGPT(chatGroup, chatHistory,
+                    // start the stream chat gpt thread
+                    StreamChatGPT chatGPT = new StreamChatGPT(chatGroup, chatHistory,
                             onSucceed, this::onRequestTimeout);
                     chatGPT.start();
                 }
                 else {
-                    ConcurrentChatGPT chatGPT = new ConcurrentChatGPT(chatGroup, text, this::sendMessages, this::onRequestTimeout);
+                    StreamChatGPT chatGPT = new StreamChatGPT(chatGroup, text, this::sendMessages, this::onRequestTimeout);
                     chatGPT.start();
                 }
 
+            // when not using stream, we can just send the request and get the response
             } else {
+                // If the chat history size is greater than 0, enable the chat history feature
                 if (chatGroup.chatHistorySize > 0) {
-                    ChatHistory chatHistory = chatHistoryManager.getChatHistory(chatGroup, sender);
+                    ChatHistory chatHistory = chatHistoryManager.retrieveChatHistory(chatGroup, sender);
+
+                    // include the sender name in the chat history
                     if (chatGroup.includeNames)
                         chatHistory.addUserMessage(String.format("%s: %s", sender, text));
                     else
                         chatHistory.addUserMessage(text);
+
+                    // send the response from ChatGPT and add it to the chat history
                     ChatGPTUtil.getChatGPTResponseAsync(chatGroup, chatHistory).thenAccept(data -> {
                         String response = ChatGPTUtil.getResponse(data);
                         chatHistory.addAssistantMessage(response);
                         sendMessages(response);
                     });
                 }
+                // when not using chat history, we can just send the request and get the response
                 else {
                     ChatGPTUtil.getChatGPTResponseAsync(chatGroup, text).thenAccept(data -> {
                         String response = ChatGPTUtil.getResponse(data);
@@ -171,19 +191,39 @@ public class ChatBotClient implements ClientModInitializer {
         }
     }
 
+    /**
+     * Split the response from ChatGPT into sentences and send them to the chat.
+     * @param chunk message chunk
+     */
     private void sendMessages(String chunk) {
+        boolean debug = (boolean) CONFIG.get("Settings.debug");
+        if (debug)
+            LOGGER.info(String.format("Sending message from ChatGPT: %s", chunk));
+
         ClientPlayerEntity client = MinecraftClient.getInstance().player;
-        LOGGER.info(String.format("Sending message from ChatGPT: %s", chunk));
+        // The maximum length of a single chat message
         int maxMessageLength = (int) CONFIG.get("Settings.max-message-length");
+        // The delay between sending each message
         long inputDelay = ((Integer) CONFIG.get("Settings.input-delay")).longValue();
-        String[] lines = chunk.split("\n\n");
+
+        // Replace double newlines with a single newline and split the message into sentences
+        chunk = chunk.replace("\n\n", "\n");
+        String[] lines = chunk.split("\n");
 
         for (final String line : lines) {
+            // Don't send empty lines
+            if (line.length() == 0) {
+                continue;
+            }
+
             List<String> messages = new ArrayList<>();
+
+            // Split long sentences into multiple messages
             for (int j = 0; j < line.length(); j += maxMessageLength) {
                 messages.add(line.substring(j, Math.min(line.length(), j + maxMessageLength)));
             }
 
+            // Send each sentence into the chat with respect to the input delay
             for (String message : messages) {
 
                 try {
@@ -209,22 +249,32 @@ public class ChatBotClient implements ClientModInitializer {
         }
     }
 
+    /**
+     * Send the response from ChatGPT to the client itself.
+     * @param chunk message chunk
+     */
     private void sendSelfMessages(String chunk) {
-        ClientPlayerEntity client = MinecraftClient.getInstance().player;
-        LOGGER.info(String.format("Sending message from ChatGPT: %s", chunk));
-        //int maxMessageLength = (int) CONFIG.get("Settings.max-message-length");
-        String[] lines = chunk.split("\n\n");
+        boolean debug = (boolean) CONFIG.get("Settings.debug");
+        if (debug)
+            LOGGER.info(String.format("Sending message from ChatGPT: %s", chunk));
 
-        for (final String line : lines) {
-            client.sendMessage(Text.of(line), false);
-        }
+        ClientPlayerEntity client = MinecraftClient.getInstance().player;
+        client.sendMessage(Text.of(chunk), false);
     }
 
+    /**
+     * Handle the timeout error when sending request to ChatGPT
+     * @param error error message
+     */
     private void onSelfRequestTimeout(String error) {
         ClientPlayerEntity client = MinecraftClient.getInstance().player;
         client.sendMessage(Text.of(String.format("Connection to ChatGPT timed out: %s", error)), false);
     }
 
+    /**
+     * Handle the timeout error when sending request to ChatGPT
+     * @param error error message
+     */
     private void onRequestTimeout(String error) {
         ClientPlayerEntity client = MinecraftClient.getInstance().player;
         client.networkHandler.sendChatMessage(String.format("Connection to ChatGPT timed out: %s", error));

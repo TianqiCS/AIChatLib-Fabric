@@ -1,4 +1,4 @@
-package com.citrusmc.chatbot;
+package com.citrusmc.aichatlib;
 
 import net.fabricmc.api.ModInitializer;
 

@@ -1,6 +1,8 @@
 package com.citrusmc.aichatlib;
 
 import com.citrusmc.aichatlib.client.ChatGroup;
+import com.citrusmc.aichatlib.configs.ClientConfig;
+import com.citrusmc.aichatlib.configs.Config;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -22,29 +24,58 @@ import java.util.function.Consumer;
 
 import static com.citrusmc.aichatlib.ChatGPTUtil.API_URL;
 
-public class ConcurrentChatGPT {
-    private static final Logger LOGGER = LoggerFactory.getLogger("ChatBot");
+/**
+ * StreamChatGPT class
+ * <p>
+ * This class is used to get the response from ChatGPT with stream feature.
+ * <p>
+ * Stream feature is used to get the response from ChatGPT in real time.
+ * However, it does not allow to control the max tokens.
+ */
+public class StreamChatGPT {
+    private static final Logger LOGGER = LoggerFactory.getLogger("ChatBot-StreamChatGPT");
+    private static final Config CONFIG = ClientConfig.getInstance();
     private static final HashMap<String, StringBuffer> messagesBuffer = new HashMap<>();
     private BackgroundEventSource eventSource;
     private volatile boolean isClosed = false;
-    private int retry = 3;
+    private int retry = 3;  // Retry 3 times if the connection is closed unexpectedly
     private final Consumer<String> onSucceed;
     private final Consumer<String> onTimeout;
 
-    @Deprecated
-    public ConcurrentChatGPT(String message, Consumer<String> onSucceed, Consumer<String> onTimeout) {
+    /**
+     * Constructor with message only
+     * @param message the message
+     * @param onSucceed the callback function when receiving the response
+     * @param onTimeout the callback function when the request times out
+     */
+    @Deprecated  // Consider using a chat group
+    public StreamChatGPT(String message, Consumer<String> onSucceed, Consumer<String> onTimeout) {
         this.onSucceed = onSucceed;
         this.onTimeout = onTimeout;
         createEventSource(message);
     }
 
-    public ConcurrentChatGPT(ChatGroup chatGroup, String message, Consumer<String> onSucceed, Consumer<String> onTimeout) {
+    /**
+     * Constructor with chat group and message
+     * @param chatGroup the chat group
+     * @param message the message
+     * @param onSucceed the callback function when receiving the response
+     * @param onTimeout the callback function when the request times out
+     */
+    public StreamChatGPT(ChatGroup chatGroup, String message, Consumer<String> onSucceed, Consumer<String> onTimeout) {
         this.onSucceed = onSucceed;
         this.onTimeout = onTimeout;
         createEventSource(chatGroup, message);
     }
 
-    public ConcurrentChatGPT(ChatGroup chatGroup, ChatHistory chatHistory, Consumer<String> onSucceed, Consumer<String> onTimeout) {
+    /**
+     * Constructor with chat group and chat history
+     * @param chatGroup the chat group
+     * @param chatHistory the chat history
+     * @param onSucceed the callback function when receiving the response
+     * @param onTimeout the callback function when the request times out
+     */
+    public StreamChatGPT(ChatGroup chatGroup, ChatHistory chatHistory, Consumer<String> onSucceed, Consumer<String> onTimeout) {
         this.onSucceed = onSucceed;
         this.onTimeout = onTimeout;
         createEventSource(chatGroup, chatHistory);
@@ -58,26 +89,46 @@ public class ConcurrentChatGPT {
         eventSource.close();
     }
 
-    @Deprecated
+    /**
+     * Create the server-sent events source
+     * @param message the message
+     */
+    @Deprecated  // Consider using a chat group
     public void createEventSource(String message) {
         Headers headers = ChatGPTUtil.createHeaders();
         RequestBody body = ChatGPTUtil.createBody(message);
         createEventSource(headers, body);
     }
 
+    /**
+     * Create the server-sent events source with chat group and message
+     * @param chatGroup the chat group
+     * @param message the message
+     */
     public void createEventSource(ChatGroup chatGroup, String message) {
         Headers headers = ChatGPTUtil.createHeaders();
         RequestBody body = ChatGPTUtil.createBody(chatGroup, message);
         createEventSource(headers, body);
     }
 
+    /**
+     * Create the server-sent events source with chat group and chat history
+     * @param chatGroup the chat group
+     * @param chatHistory the chat history
+     */
     public void createEventSource(ChatGroup chatGroup, ChatHistory chatHistory) {
         Headers headers = ChatGPTUtil.createHeaders();
         RequestBody body = ChatGPTUtil.createBody(chatGroup, chatHistory);
         createEventSource(headers, body);
     }
 
+    /**
+     * Create the server-sent events source
+     * @param headers the headers
+     * @param body the request body
+     */
     public void createEventSource(Headers headers, RequestBody body) {
+        boolean debug = (boolean) CONFIG.get("Settings.debug");
         BackgroundEventHandler myHandler = new BackgroundEventHandler() {
 
             @Override
@@ -86,22 +137,26 @@ public class ConcurrentChatGPT {
             @Override
             public void onClosed() throws Exception {
                 if (isClosed) {
-                    LOGGER.info("Connection closed by server");
+                    if (debug)
+                        LOGGER.info("Connection closed by server");
                 } else {
-                    LOGGER.info("Connection closed unexpectedly");
+                    if (debug)
+                        LOGGER.info("Connection closed unexpectedly");
                 }
             }
 
             public void onMessage(String event, MessageEvent messageEvent) {
-                // ... these methods are the same as for EventHandler before
+
                 String data = messageEvent.getData();
 
+                // Check if the response is the end of the conversation
                 if (data.equals("[DONE]")) {
                     isClosed = true;
                     eventSource.close();
                     return;
                 }
 
+                // Check if the response is the end of the conversation
                 JsonObject response = new Gson().fromJson(data, JsonObject.class);
                 JsonElement finishReason = response.get("choices").getAsJsonArray()
                         .get(0).getAsJsonObject()
@@ -111,6 +166,7 @@ public class ConcurrentChatGPT {
                     eventSource.close();
                 }
 
+                // Add the new stream text to the buffer
                 String id = response.get("id").getAsString();
                 if (!messagesBuffer.containsKey(id)) {
                     messagesBuffer.put(id, new StringBuffer());
@@ -118,12 +174,16 @@ public class ConcurrentChatGPT {
                 String content = getResponse(response);
                 StringBuffer buffer = messagesBuffer.get(id);
 
+                // The end of stream, activate the callback function
                 if (content == null) {
                     onSucceed.accept(buffer.toString());
                     messagesBuffer.remove(id);
                     return;
                 }
+
                 buffer.append(content);
+
+                // Check if the buffer contains a line break, if so, activate the callback function and send the message before the line break
                 int linebreakIndex = buffer.indexOf("\n");
                 if (linebreakIndex > -1) {
                     onSucceed.accept(buffer.substring(0, linebreakIndex));
@@ -137,9 +197,13 @@ public class ConcurrentChatGPT {
             public void onError(Throwable t) {}
         };
 
+        // Connection error handler
         ConnectionErrorHandler errorHandler = t -> {
+            // Retry 3 times if the connection is closed unexpectedly
+            // Do not retry if the connection is closed by our end
             ConnectionErrorHandler.Action action = (isClosed || retry <= 0) ? ConnectionErrorHandler.Action.SHUTDOWN : ConnectionErrorHandler.Action.PROCEED;
-            LOGGER.info(String.format("Connection error [%s %d]: %s", action, retry, t.getMessage()));
+            if (debug)
+                LOGGER.info(String.format("Connection error [%s %d]: %s", action, retry, t.getMessage()));
 
             if (action == ConnectionErrorHandler.Action.SHUTDOWN && retry <= 0) {
                 onTimeout.accept(t.getMessage());
@@ -148,7 +212,7 @@ public class ConcurrentChatGPT {
             return action;
         };
 
-
+        // Create the server-sent events source
         this.eventSource = new BackgroundEventSource.Builder(myHandler,
                 new EventSource.Builder(
                         ConnectStrategy.http(URI.create(API_URL))
@@ -164,6 +228,11 @@ public class ConcurrentChatGPT {
                 .build();
     }
 
+    /**
+     * Get the response message from the response object
+     * @param response the response object
+     * @return the response message
+      */
     public static String getResponse(JsonObject response) {
         JsonObject delta = response
                 .get("choices").getAsJsonArray()

@@ -1,10 +1,15 @@
-package com.citrusmc.chatbot.client;
+package com.citrusmc.aichatlib.client;
 
-import com.citrusmc.chatbot.ChatHistory;
+import com.citrusmc.aichatlib.ChatHistory;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * ChatHistoryManager is a singleton class that manages the chat histories of the client.
+ * If includeNames is false, then the key will be stored in the format of chatGroup.name#sender
+ * Otherwise, the key will be stored in the format of chatGroup.name
+ */
 public class ChatHistoryManager {
     private static final ChatHistoryManager INSTANCE = new ChatHistoryManager();
     private final Map<String, ChatHistory> chatHistoryMap;
@@ -17,6 +22,11 @@ public class ChatHistoryManager {
         return INSTANCE;
     }
 
+    /**
+     * Remove the chat history from the chatHistoryMap
+     * @param chatGroup the chat group
+     * @param sender the sender
+     */
     public void removeChatHistory(ChatGroup chatGroup, String sender) {
         if (chatGroup.includeNames) {
             this.chatHistoryMap.remove(chatGroup.name);
@@ -25,6 +35,12 @@ public class ChatHistoryManager {
         }
     }
 
+    /**
+     * Add the chat history to the chatHistoryMap
+     * @param chatGroup the chat group
+     * @param sender the sender
+     * @param chatHistory the chat history
+     */
     public void addChatHistory(ChatGroup chatGroup, String sender, ChatHistory chatHistory) {
         if (chatGroup.includeNames) {
             this.chatHistoryMap.put(chatGroup.name, chatHistory);
@@ -33,7 +49,14 @@ public class ChatHistoryManager {
         }
     }
 
-    public ChatHistory getChatHistory(ChatGroup chatGroup, String sender) {
+    /**
+     * Get the chat history from the chatHistoryMap by chat group and sender name.
+     * If not found, create and return a new chat history and add it to the chatHistoryMap
+     * @param chatGroup the chat group
+     * @param sender the sender
+     * @return the chat history
+     */
+    public ChatHistory retrieveChatHistory(ChatGroup chatGroup, String sender) {
         ChatHistory chatHistory;
         if (chatGroup.includeNames) {
             chatHistory = this.chatHistoryMap.get(chatGroup.name);

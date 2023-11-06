@@ -1,9 +1,12 @@
-package com.citrusmc.chatbot;
+package com.citrusmc.aichatlib;
 
 import com.google.gson.Gson;
 
 import java.util.LinkedList;
 
+/**
+ * Class to represent the conversation history
+ */
 public class ChatHistory {
     private final LinkedList<Message> conversationHistory = new LinkedList<>();
     private int maxHistorySize;
@@ -19,17 +22,29 @@ public class ChatHistory {
         }
     }
 
+    /**
+     * Constructor
+     * @param maxHistorySize the maximum size of the chat history
+     */
     public ChatHistory(int maxHistorySize) {
         this.maxHistorySize = maxHistorySize;
     }
 
+    /**
+     * Copy constructor
+     * @param chatHistory the chat history to copy
+     */
     public ChatHistory(ChatHistory chatHistory) {
         this.maxHistorySize = chatHistory.maxHistorySize;
         // Copy the reference to messages from the other chat history
         this.conversationHistory.addAll(chatHistory.conversationHistory);
     }
 
-    // Method to add a message to the history
+    /**
+     * Add a message to the chat history
+     * @param role the role of the message
+     * @param content the content of the message
+     */
     private void addMessage(String role, String content) {
         if (conversationHistory.size() >= maxHistorySize) {
             conversationHistory.removeFirst(); // Remove the oldest message
@@ -37,31 +52,51 @@ public class ChatHistory {
         conversationHistory.addLast(new Message(role, content));
     }
 
-    // Method to add a user message to the history
+    /**
+     * Add a user message to the chat history
+     * @param message the message
+     */
     public void addUserMessage(String message) {
         addMessage("user", message);
     }
 
-    // Method to add a system message to the history
+    /**
+     * Add a system message to the chat history
+     * @param message the message
+     */
     public void addSystemMessage(String message) {
         addMessage("system", message);
     }
 
-    // Method to add an assistant message to the history
+    /**
+     * Add an assistant message to the chat history
+     * @param message the message
+     */
     public void addAssistantMessage(String message) {
         addMessage("assistant", message);
     }
 
+    /**
+     * Get the length of the chat history
+     */
     public int length() {
         return conversationHistory.size();
     }
 
-    // Method to generate a JSON string from the conversation history
+    /**
+     * Convert the chat history to JSON
+     * @return the JSON string
+     */
     public String toJson() {
         Gson gson = new Gson();
         return gson.toJson(conversationHistory);
     }
 
+    /**
+     * Concatenate two chat histories
+     * @param other the other chat history
+     * @return the concatenated chat history
+     */
     public ChatHistory concat(ChatHistory other) {
         ChatHistory newChatHistory = new ChatHistory(this.maxHistorySize + other.maxHistorySize);
         newChatHistory.conversationHistory.addAll(this.conversationHistory);
@@ -69,6 +104,12 @@ public class ChatHistory {
         return newChatHistory;
     }
 
+    /**
+     * Concatenate two chat histories
+     * @param other the other chat history
+     * @param inplace whether to concatenate in place
+     * @return the concatenated chat history
+     */
     public ChatHistory concat(ChatHistory other, boolean inplace) {
         if (inplace) {
             this.maxHistorySize += other.maxHistorySize;

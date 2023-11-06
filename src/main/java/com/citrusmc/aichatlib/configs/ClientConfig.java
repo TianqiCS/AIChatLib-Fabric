@@ -1,10 +1,10 @@
-package com.citrusmc.chatbot.configs;
+package com.citrusmc.aichatlib.configs;
 
 public class ClientConfig extends Config{
     static ClientConfig instance = null;
 
     private ClientConfig() {
-        String configFileLocation = "config/ClientConfig.yml";
+        String configFileLocation = "config/AIChatLib/ClientConfig.yml";
         this.config = this.loadConfig(configFileLocation, getDefaultConfig());
     }
 
