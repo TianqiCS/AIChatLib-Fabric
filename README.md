@@ -6,6 +6,7 @@ You may find this project useful if you are interested in:
 - Developing a server side mod/plugin that uses OpenAI GPT API.
 - Developing generic Java applications that uses OpenAI GPT API.
 
+![screenshot.png](assets%2Fscreenshot.png)
 ## Features
 - Chat integration with ChatGPT for intelligent and interactive conversations.
 - Customizable actions and pattern matching for different chat messages during singleplayer and multiplayer.
