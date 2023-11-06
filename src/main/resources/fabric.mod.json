@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "chatbot",
+  "version": "${version}",
+
+  "name": "ChatBot",
+  "description": "",
+  "authors": [],
+  "contact": {},
+
+  "license": "All-Rights-Reserved",
+  "icon": "assets/chatbot/icon.png",
+
+  "environment": "*",
+  "entrypoints": {},
+
+          "mixins": [
+        "chatbot.mixins.json"
+      ],
+    
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+              "fabric": "*",
+          "minecraft": "${minecraft_version}"
+  }
+}
