@@ -31,9 +31,6 @@ You may find this project useful if you are interested in:
 - Note, a longer prompt/message/chat history will result in a longer response time and **higher API token usage**. 
 
 ## Configuration
-Edit the `config.yml` file located in the `config` directory of your Minecraft folder to customize the mod settings. Available settings include:
-- `maxChatHistorySize`: The maximum number of messages retained in chat history.
-- `voiceChatHotkey`: The keybinding for activating voice chat.
 
 ## Dependencies
 - Minecraft 1.20.2
