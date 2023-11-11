@@ -32,6 +32,7 @@ dependencies {
     include 'com.launchdarkly:okhttp-eventsource:4.1.1'
     include 'org.yaml:snakeyaml:2.2'
     include 'com.launchdarkly:launchdarkly-logging:1.1.1'
+    include 'org.jetbrains.kotlin:kotlin-stdlib:1.7.0'
 }
 
 processResources {

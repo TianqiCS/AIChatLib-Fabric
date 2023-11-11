@@ -124,12 +124,11 @@ public class ChatGPTUtil {
                 "\"model\": \"" + chatGroup.model + "\", " +
                 "\"messages\": " + newChatHistory.toJson() + ", " +
                 // stream is not compatible with max_tokens
-                (USE_STREAM ? "": "\"max_tokens\": " + chatGroup.maxTokens + ", ") +
+                (USE_STREAM ? "\"stream\": true" : "\"max_tokens\": " + chatGroup.maxTokens) + ", " +
                 "\"temperature\": " + chatGroup.temperature + ", " +
                 "\"top_p\": " + chatGroup.topP + ", " +
                 "\"frequency_penalty\": " + chatGroup.frequencyPenalty + ", " +
-                "\"presence_penalty\": " + chatGroup.presencePenalty + ", " +
-                "\"stream\": " + USE_STREAM +
+                "\"presence_penalty\": " + chatGroup.presencePenalty +
                 "}";
 
         if ((boolean) CONFIG.get("Settings.debug"))

@@ -4,7 +4,7 @@ Model:
     openai-engine: "gpt-3.5-turbo"
     use-stream: true
     system-prompt: "You are a helpful assistant in Minecraft. Your responses should be concise, clear, and in plain text. Avoid special characters, styles, and emojis that the game chat can't display. Provide brief answers and only elaborate if the player requests more details. Notice that the questions are likely to be irrelevant to the context of the game."
-    max-tokens: 5000
+    max-tokens: 2000
     temperature: 1.0
     top-p: 1.0
     frequency-penalty: 0.0
