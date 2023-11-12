@@ -68,15 +68,28 @@ public class ChatGroup {
      */
     public int chatHistorySize;
 
+    /**
+     * The list of stop sequences
+     * OpenAI: Up to 4 sequences where the API will stop generating further tokens.
+     * No checks are made for the number of sequences.
+     */
+    public ArrayList<String> stop;
+
     // vanilla chat group
     public ChatGroup() {
         this.name = "vanilla";
         this.sender = "^<([^> ]+)> .*$";
         this.message = "^<[^> ]+> (.*)$";
 
-        this.triggers = (ArrayList<String>) CONFIG.get("VanillaChatGroup.triggers");
-        this.blacklist = (ArrayList<String>) CONFIG.get("VanillaChatGroup.blacklist");
-        this.prompt = (String) CONFIG.get("VanillaChatGroup.prompt");
+        if (CONFIG.get("VanillaChatGroup.triggers") != null)
+            this.triggers = (ArrayList<String>) CONFIG.get("VanillaChatGroup.triggers");
+        if (CONFIG.get("VanillaChatGroup.blacklist") != null)
+            this.blacklist = (ArrayList<String>) CONFIG.get("VanillaChatGroup.blacklist");
+        if (CONFIG.get("VanillaChatGroup.stop-sequences")!= null)
+            this.stop = (ArrayList<String>) CONFIG.get("VanillaChatGroup.stop-sequences");
+
+        if (CONFIG.get("VanillaChatGroup.prompt")!= null)
+            this.prompt = (String) CONFIG.get("VanillaChatGroup.prompt");
 
         if (CONFIG.get("VanillaChatGroup.model") != null)
             this.model = (String) CONFIG.get("VanillaChatGroup.model");
@@ -113,6 +126,9 @@ public class ChatGroup {
             this.blacklist = (ArrayList<String>) chatGroup.get("blacklist");
         if (chatGroup.get("triggers") != null)
             this.triggers = (ArrayList<String>) chatGroup.get("triggers");
+        if (chatGroup.get("stop-sequences") != null)
+            this.stop = (ArrayList<String>) chatGroup.get("stop-sequences");
+
         if (chatGroup.get("prompt") != null)
             this.prompt = (String) chatGroup.get("prompt");
 

@@ -125,6 +125,7 @@ public class ChatGPTUtil {
                 "\"messages\": " + newChatHistory.toJson() + ", " +
                 // stream is not compatible with max_tokens
                 (USE_STREAM ? "\"stream\": true" : "\"max_tokens\": " + chatGroup.maxTokens) + ", " +
+                (chatGroup.stop != null && chatGroup.stop.size() > 0 ? "\"stop\": " + chatGroup.stop + ", " : "") +
                 "\"temperature\": " + chatGroup.temperature + ", " +
                 "\"top_p\": " + chatGroup.topP + ", " +
                 "\"frequency_penalty\": " + chatGroup.frequencyPenalty + ", " +

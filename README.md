@@ -32,6 +32,7 @@ You may find this project useful if you are interested in:
 - Note, a longer prompt/message/chat history will result in a longer response time and **higher API token usage**. 
 
 ## Configuration
+This [document](assets/configuration.md) explains how to configure AIChatLib to utilize GPT API.
 
 ## Dependencies
 - Minecraft 1.20.2

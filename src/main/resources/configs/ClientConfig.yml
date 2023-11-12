@@ -39,6 +39,7 @@ ChatGroups:
         blacklist:
             - "username1"
             - "banned_word2"
+        stop-sequences: []
     vanilla-style-private-chat-example:
         chat-history-size: 5
         include-names: false
