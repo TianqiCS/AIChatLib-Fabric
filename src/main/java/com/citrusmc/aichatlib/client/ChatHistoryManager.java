@@ -50,6 +50,15 @@ public class ChatHistoryManager {
     }
 
     /**
+     * Add the chat history to the chatHistoryMap directly
+     * @param key the key name of the chat history
+     * @param chatHistory the chat history
+     */
+    public void addChatHistory(String key, ChatHistory chatHistory) {
+        this.chatHistoryMap.put(key, chatHistory);
+    }
+
+    /**
      * Get the chat history from the chatHistoryMap by chat group and sender name.
      * If not found, create and return a new chat history and add it to the chatHistoryMap
      * @param chatGroup the chat group
@@ -69,6 +78,17 @@ public class ChatHistoryManager {
             chatHistory = new ChatHistory(chatGroup.chatHistorySize + 1);
             addChatHistory(chatGroup, sender, chatHistory);
         }
+        return chatHistory;
+    }
+
+    /**
+     * Get the chat history from the chatHistoryMap by key. Will not create a new chat history if not found.
+     * @param key the key name of the chat history
+     * @return the chat history
+     */
+    public ChatHistory getChatHistory(String key) {
+        ChatHistory chatHistory;
+        chatHistory = this.chatHistoryMap.get(key);
         return chatHistory;
     }
 }

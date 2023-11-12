@@ -9,12 +9,15 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -33,6 +36,8 @@ public class ChatBotClient implements ClientModInitializer {
     private static TextParser PARSER = null;
     private final Semaphore semaphore = new Semaphore(1);
     private volatile ChatHistoryManager chatHistoryManager = ChatHistoryManager.getInstance();
+    private boolean inFreeChat = false;
+    private String currentFreeChat;
 
     /**
      * Initialize the client mod
@@ -52,7 +57,15 @@ public class ChatBotClient implements ClientModInitializer {
                             .then(argument("message", greedyString())
                             .executes(context -> {
                                 String message = getString(context, "message");
-                                context.getSource().sendFeedback(Text.of("Sending message to ChatGPT: " + message));
+
+                                // Exit the free chat if the message is "exit"
+                                if (message.equals("exit")) {
+                                    context.getSource().sendFeedback(Text.of("You have exited the free chat."));
+                                    inFreeChat = false;
+                                    return 0;
+                                }
+
+                                context.getSource().sendFeedback(Text.of("§a§lYou§r " + message));
                                 // Don't send empty messages
                                 if (message == null || message.length() == 0) {
                                     return 0;
@@ -71,6 +84,47 @@ public class ChatBotClient implements ClientModInitializer {
                                 return 0;
                             })));
         });
+
+        // Register the askgpt command with chat history
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            dispatcher.register(
+                    ClientCommandManager
+                            .literal("askgpt")
+                            .executes(context -> {
+                                context.getSource().sendFeedback(Text.of("You now enter a new free chat with ChatGPT. Type \"/askgpt exit\" to exit."));
+                                DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+                                LocalDateTime now = LocalDateTime.now();
+                                currentFreeChat = dtf.format(now);
+                                chatHistoryManager.addChatHistory(currentFreeChat, new ChatHistory(30));
+                                inFreeChat = true;
+                                return 0;
+                            }));
+        });
+
+        // capture the chat message when in free chat
+        ClientSendMessageEvents.ALLOW_CHAT.register((message -> {
+            if (inFreeChat) {
+                ClientPlayerEntity client = MinecraftClient.getInstance().player;
+                assert client != null;
+                ChatGroup chatGroup = TextParser.getChatGroupByName("vanilla");
+                ChatHistory chatHistory = chatHistoryManager.getChatHistory(currentFreeChat);
+                chatHistory.addUserMessage(message);
+                client.sendMessage(Text.of("§a§lYou§r " + message));
+                client.sendMessage(Text.of("§eYou are in free chat with ChatGPT. Type \"§f/askgpt exit§e\" to exit."), true);
+                if (useStream) {
+                    StreamChatGPT chatGPT = new StreamChatGPT(chatGroup, chatHistory, this::sendSelfMessagesWithHistory, this::onSelfRequestTimeout);
+                    chatGPT.start();
+                } else {
+                    ChatGPTUtil.getChatGPTResponseAsync(chatGroup, chatHistory).thenAccept(data -> {
+                        String response = ChatGPTUtil.getResponse(data);
+                        sendSelfMessagesWithHistory(response);
+                    });
+                }
+                return false;
+            }
+            return true;
+        }));
+
 
         // Register chat message event to capture chat messages (vanilla and modded environments)
         ClientReceiveMessageEvents.CHAT.register(((message, signedMessage, sender, params, receptionTimestamp) -> {
@@ -147,7 +201,7 @@ public class ChatBotClient implements ClientModInitializer {
 
                     // warp the sendMessage method to add the response to the chat history
                     Consumer<String> onSucceed = (response) -> {
-                        chatHistory.addAssistantMessage(response);
+                        chatHistory.addAssistantMessage(response, true);
                         sendMessages(response);
                     };
 
@@ -259,7 +313,16 @@ public class ChatBotClient implements ClientModInitializer {
             LOGGER.info(String.format("Sending message from ChatGPT: %s", chunk));
 
         ClientPlayerEntity client = MinecraftClient.getInstance().player;
-        client.sendMessage(Text.of(chunk), false);
+        client.sendMessage(Text.of(String.format("§6§lAI§r %s", chunk)), false);
+    }
+
+    /**
+     * Send the response from ChatGPT to the client itself and add it to the local chat history.
+     * @param chunk message chunk
+     */
+    private void sendSelfMessagesWithHistory(String chunk) {
+        chatHistoryManager.getChatHistory(currentFreeChat).addAssistantMessage(chunk, true);
+        sendSelfMessages(chunk);
     }
 
     /**

@@ -76,6 +76,20 @@ public class ChatHistory {
         addMessage("assistant", message);
     }
 
+    public void addAssistantMessage(String message, boolean mergeAssistantMessage) {
+        if (mergeAssistantMessage) {
+            if (conversationHistory.size() > 0) {
+                Message lastMessage = conversationHistory.getLast();
+                if (lastMessage.role.equals("assistant")) {
+                    lastMessage.content += message;
+                    return;
+                }
+            }
+        }
+        addMessage("assistant", message);
+    }
+
+
     /**
      * Get the length of the chat history
      */
